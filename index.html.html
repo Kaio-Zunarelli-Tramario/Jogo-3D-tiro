@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estande de Tiro 3D</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+body,html{margin:0;height:100%;overflow:hidden;user-select:none;background:#050b1a;color:#e2e8f0;font-family:'Segoe UI',Tahoma,sans-serif}
+.pn{background:linear-gradient(180deg, rgba(11,26,54,0.92) 0%, rgba(7,16,42,0.92) 100%);border:1px solid #0e7fb8;border-radius:16px;box-shadow:0 0 22px rgba(14,165,233,0.18);padding:18px}
+.lb{display:block;font-size:10px;font-weight:700;color:#7dd3fc;text-transform:uppercase;margin:12px 0 5px}
+.in{width:100%;background:#08122b;border:1px solid #1e3a5f;border-radius:8px;padding:9px;font-size:13px;color:#fff;outline:none}
+.in:focus{border-color:#22d3ee}
+.md{border:1px solid #1e3a5f;background:#08122b;border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:.15s}
+.md i{font-size:22px;display:block;margin-bottom:6px;color:#cbd5e1}
+.md b{display:block;font-size:13px}.md span{font-size:11px;color:#94a3b8}
+.md.on{border-color:#22d3ee;box-shadow:0 0 14px rgba(34,211,238,0.53);background:#0c2a4d}
+.bt{background:#0ea5e9;color:#fff;font-weight:800;border-radius:9px;padding:11px;width:100%}
+.bt:hover{background:#0284c7}
+.nv{cursor:pointer;color:#cbd5e1;padding:6px 2px;border-bottom:2px solid transparent}.nv.on{color:#fff;border-color:#22d3ee}
+.cl{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer}.cl.on{border-color:#fff;transform:scale(1.12)}
+input[type=range]{width:100%;accent-color:#22d3ee}
+.hud{background:rgba(11,18,38,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 14px;backdrop-filter:blur(6px)}
+
+/* MIRA DA SNIPER REALISTA */
+#sc {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  z-index: 15;
+  background: radial-gradient(circle at center, transparent 24%, rgba(0,0,0,0.92) 58%, #000 75%);
+}
+#sc::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 0; right: 0; height: 2px;
+  background: #111;
+  transform: translateY(-50%);
+}
+#sc::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 0; bottom: 0; width: 2px;
+  background: #111;
+  transform: translateX(-50%);
+}
+.sniper-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px; height: 90px;
+  border: 2px solid rgba(239, 68, 68, 0.7);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+.sniper-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px; height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+.pulse{animation:p 1s 2}@keyframes p{50%{box-shadow:0 0 30px #22d3ee}}
+</style>
+</head>
+<body>
+
+<!-- BOTÃO DE CONFIGURAÇÕES FLUTUANTE / ACESSÍVEL DENTRO DO JOGO -->
+<div id="in-game-gear" class="hidden fixed top-3 right-20 z-30 hud cursor-pointer text-xl text-slate-300 hover:text-cyan-400">
+  <i class="fa-solid fa-gear"></i>
+</div>
+
+<div id="gc" class="fixed inset-0 hidden">
+  <div id="xh" class="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-400 pointer-events-none z-10"></div>
+  <div id="ao" class="absolute left-1/2 top-1/2 w-14 h-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-sky-400 pointer-events-none hidden z-10"></div>
+  
+  <!-- RETÍCULO DA SNIPER -->
+  <div id="sc">
+    <div class="sniper-ring"></div>
+    <div class="sniper-dot"></div>
+  </div>
+
+  <div id="fl" class="absolute inset-0 pointer-events-none z-20 opacity-0 transition-opacity" style="background:rgba(239,68,68,0.35)"></div>
+  <div class="absolute top-3 left-3 right-3 flex justify-between items-start z-10 pointer-events-none">
+    <div class="hud w-52 pointer-events-auto">
+      <div class="text-[10px] text-slate-400 font-bold">SAÚDE</div>
+      <div class="h-2.5 bg-slate-800 rounded-full overflow-hidden"><div id="hb" class="h-full bg-emerald-500 transition-all" style="width:100%"></div></div>
+      <div class="text-[10px] text-cyan-400 font-bold mt-1">ESCUDO</div>
+      <div class="h-2.5 bg-slate-800 rounded-full overflow-hidden"><div id="sb" class="h-full bg-cyan-400 transition-all" style="width:0"></div></div>
+    </div>
+    <div class="hud text-center pointer-events-auto">
+      <div id="hm" class="text-xs font-bold text-amber-400"></div>
+      <div id="hs" class="text-xl font-black text-white"></div>
+      <div class="text-[10px] text-slate-400">Ping: <span id="pg">—</span></div>
+    </div>
+    <div class="flex flex-col items-end gap-2 pointer-events-auto">
+      <div class="hud text-right">
+        <div id="wn" class="text-xs text-slate-400 font-bold"></div>
+        <i id="wi" class="fa-solid fa-crosshairs text-amber-400 text-lg"></i>
+      </div>
+      <div id="kf" class="text-xs text-right"></div>
+    </div>
+  </div>
+  <div class="absolute bottom-3 left-3 text-[10px] text-slate-500 z-10">WASD mover · Shift correr · Espaço pular · Botão direito mirar · V 3ª pessoa</div>
+  <div id="em" class="hidden absolute inset-0 z-40 bg-[rgba(5,11,26,0.9)] grid place-items-center p-4">
+    <div class="pn max-w-sm w-full text-center">
+      <h2 id="mt" class="text-3xl font-black text-sky-400"></h2>
+      <p id="md" class="text-slate-400 text-sm mb-3"></p>
+      <div class="text-xs text-left bg-[#08122b] rounded-lg p-3 space-y-1">
+        <div class="flex justify-between"><span>Tiros</span><b id="s1"></b></div>
+        <div class="flex justify-between"><span>Dano causado</span><b id="s2"></b></div>
+        <div class="flex justify-between"><span>Abates</span><b id="s3"></b></div>
+        <div class="flex justify-between"><span>Rodadas vencidas</span><b id="s4"></b></div>
+      </div>
+      <button id="mc" class="bt mt-4"></button>
+      <button onclick="location.reload()" class="bt mt-2" style="background:#1e293b">Sair para o menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAINEL DE CONFIGURAÇÕES (MODAL DA ENGRENAGEM) -->
+<div id="gear-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm grid place-items-center p-4">
+  <div class="pn max-w-md w-full flex flex-col gap-4">
+    <div class="flex justify-between items-center border-b border-[#1e3a5f] pb-3">
+      <h3 class="text-sky-300 font-black text-lg"><i class="fa-solid fa-gear mr-2"></i>CONFIGURAÇÕES DO JOGO</h3>
+      <button id="gear-close" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="flex flex-col gap-3">
+      <div>
+        <label class="lb">Volume Geral do Jogo</label>
+        <input type="range" id="opt-vol" min="0" max="100" value="80">
+      </div>
+      <div>
+        <label class="lb">Qualidade Gráfica</label>
+        <select id="opt-gfx" class="in">
+          <option value="high">Alta (Padrão)</option>
+          <option value="medium">Média</option>
+          <option value="low">Baixa (Desempenho)</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-between pt-2">
+        <span class="text-xs font-bold text-slate-300 uppercase">Efeitos de Tela / Flash</span>
+        <input type="checkbox" id="opt-flash" checked class="w-4 h-4 accent-cyan-400 cursor-pointer">
+      </div>
+    </div>
+    <button id="gear-save" class="bt mt-2">Salvar Configurações</button>
+  </div>
+</div>
+
+<div id="lob" class="fixed inset-0 z-50 overflow-auto" style="background:radial-gradient(ellipse at 55% 0,#17407a 0,#07122b 55%,#030814)">
+  <div class="max-w-[1320px] mx-auto p-4">
+    <header class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-crosshairs text-4xl text-cyan-400"></i>
+        <div>
+          <div class="text-2xl font-black italic leading-none">ESTANDE DE TIRO <span class="text-sky-400 text-3xl">3D</span></div>
+          <div class="text-[10px] tracking-[.35em] text-sky-300">TREINE · COMPITA · EVOLUA</div>
+        </div>
+      </div>
+      <nav class="hidden md:flex gap-7 text-sm font-bold">
+        <a class="nv on" data-t="home"><i class="fa-solid fa-house mr-1"></i>INÍCIO</a>
+        <a class="nv" data-t="guns"><i class="fa-solid fa-gun mr-1"></i>ARMAS</a>
+        <a class="nv" data-t="skin"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>PERSONALIZAR</a>
+        <a class="nv" data-t="rank"><i class="fa-solid fa-crown mr-1"></i>RANKING</a>
+      </nav>
+      <div class="flex gap-5 text-xl text-slate-300">
+        <i class="fa-regular fa-bell cursor-pointer"></i>
+        <i id="btn-gear" class="fa-solid fa-gear cursor-pointer hover:text-sky-400 transition-colors"></i>
+        <i class="fa-solid fa-circle-user text-2xl"></i>
+      </div>
+    </header>
+
+    <div id="tabm" class="hidden pn mb-4">
+      <div class="flex justify-between mb-2"><b id="tt" class="text-sky-300"></b><button onclick="tab('home')" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button></div>
+      <div id="tb"></div>
+    </div>
+
+    <div class="grid lg:grid-cols-[1fr_1.1fr_1fr] gap-4">
+      <!-- Coluna 1: Perfil e Personalização -->
+      <section id="pf" class="pn">
+        <div class="flex items-center gap-3">
+          <div class="w-16 h-16 rounded-xl bg-[#0e2a4d] border border-sky-500 grid place-items-center"><i class="fa-solid fa-user-ninja text-3xl text-sky-300"></i></div>
+          <div class="flex-1">
+            <div id="hn" class="italic font-black text-lg">Atirador</div>
+            <div class="text-[11px] text-sky-300 font-bold">NÍVEL <span id="lv">12</span></div>
+            <div class="h-2 bg-slate-800 rounded-full overflow-hidden mt-1"><div id="xb" class="h-full bg-sky-400" style="width:56%"></div></div>
+            <div id="xt" class="text-[10px] text-right text-slate-400 mt-0.5">850 / 1.500 XP</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-2">
+          <div><label class="lb">Nome / Codinome</label><input id="nm" class="in" value="Atirador" maxlength="14"></div>
+          <div><label class="lb">Equipe multiplayer</label><select id="tm" class="in"><option value="1">Equipe Azul</option><option value="2">Equipe Vermelha</option><option value="3">Equipe Verde</option><option value="4">Equipe Amarela</option></select></div>
+        </div>
+        <label class="lb">Sensibilidade <span id="sv" class="float-right text-white">2.0</span></label>
+        <input id="se" type="range" min=".5" max="5" step=".1" value="2">
+        <label class="lb">Cor do personagem (voxel)</label>
+        <div id="cl" class="flex gap-3"></div>
+        <label class="lb">Foto na cabeça / rosto</label>
+        <label class="in text-center cursor-pointer block"><i class="fa-solid fa-user-plus mr-2"></i><b>Selecionar foto</b><input id="ff" type="file" accept="image/*" class="hidden"></label>
+        <span id="fn" class="text-[10px] text-slate-500 block mt-1">Rosto padrão voxel</span>
+        <label class="lb">Pré-visualização 3D</label>
+        <div class="relative rounded-xl border border-[#1e3a5f] bg-[#050d20] h-52 overflow-hidden">
+          <div id="pv" class="absolute inset-0"></div>
+          <button id="pl1" class="absolute left-2 top-1/2 -translate-y-1/2 text-sky-400 text-xl z-10"><i class="fa-solid fa-chevron-left"></i></button>
+          <button id="pl2" class="absolute right-2 top-1/2 -translate-y-1/2 text-sky-400 text-xl z-10"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      <!-- Coluna 2: Modos de Jogo e Banner -->
+      <section class="pn flex flex-col" style="padding:0;overflow:hidden">
+        <div class="h-44 p-5 flex items-end relative" style="background:linear-gradient(rgba(0,0,0,0),rgba(7,16,42,0.95)), radial-gradient(circle at 70% 30%,#2b6cb0,#0a1a3a 70%)">
+          <div class="absolute top-4 right-4 text-right">
+            <div class="text-sky-300 font-black italic tracking-widest text-sm drop-shadow">SOBREVIVA</div>
+            <div class="text-cyan-400 font-black italic tracking-widest text-lg drop-shadow">SEJA O ÚLTIMO!</div>
+          </div>
+          <div>
+            <div id="bt" class="text-4xl font-black italic leading-none drop-shadow-md">BATTLE ROYALE</div>
+            <div id="bs" class="text-xs text-sky-300 mt-1 font-semibold">ULTIMO EM PÉ VENCE!</div>
+          </div>
+        </div>
+        <div class="p-4 flex flex-col gap-3 flex-1 justify-between">
+          <div>
+            <label class="lb" style="margin:0 0 6px 0">Modo de jogo</label>
+            <div id="mds" class="grid grid-cols-2 gap-3">
+              <div class="md on" data-m="br"><i class="fa-solid fa-parachute-box"></i><b>BATTLE ROYALE</b><span>Solo, Duo, Squad</span></div>
+              <div class="md" data-m="pvp"><i class="fa-solid fa-people-arrows"></i><b>PVP 5v5</b><span>Equipe vs Equipe</span></div>
+              <div class="md" data-m="dm"><i class="fa-solid fa-skull"></i><b>DEATHMATCH</b><span>Todos contra Todos</span></div>
+              <div class="md" data-m="train"><i class="fa-solid fa-bullseye"></i><b>TREINAMENTO</b><span>Pratique suas habilidades</span></div>
+            </div>
+            <label class="lb" style="margin:10px 0 5px 0">Mapa</label>
+            <select id="mp" class="in">
+              <option value="arena">Estande Clássico</option>
+              <option value="neon">Base Neon Cyber</option>
+              <option value="desert">Deserto Cúbico</option>
+            </select>
+          </div>
+          <button id="go" class="rounded-xl py-4 text-xl font-black tracking-wide text-[#00131f] shadow-lg transition-transform hover:scale-[1.01]" style="background:linear-gradient(90deg,#06b6d4,#22d3ee)">
+            <i class="fa-solid fa-crosshairs mr-2"></i>INICIAR PARTIDA »
+          </button>
+        </div>
+      </section>
+
+      <!-- Coluna 3: Sala Multiplayer e Jogadores -->
+      <section class="pn flex flex-col justify-between">
+        <div>
+          <h2 class="font-black text-sky-300 text-sm flex items-center gap-2"><i class="fa-solid fa-users"></i>SALA MULTIPLAYER <span class="text-sky-400 text-xs">(ATÉ 6 PLAYERS)</span></h2>
+          <div class="grid grid-cols-2 gap-3 mt-2">
+            <div><label class="lb">Modo de jogo</label><select id="gm" class="in"><option value="ffa">Cada um por si</option><option value="team">Equipe x Equipe</option></select></div>
+            <div><label class="lb">Rodadas</label><select id="rd" class="in"><option value="3">3 Rodadas</option><option value="5">5 Rodadas</option><option value="7">7 Rodadas</option></select></div>
+          </div>
+          <label class="lb">Mapa da arena</label>
+          <select id="mp2" class="in"><option value="arena">Estande Clássico</option><option value="neon">Base Neon Cyber</option><option value="desert">Deserto Cúbico</option></select>
+          <button id="cr" class="bt mt-3"><i class="fa-solid fa-plus mr-1"></i>Criar Sala (Host)</button>
+          <div class="flex mt-3">
+            <input id="rc" class="in uppercase tracking-widest text-center" style="border-radius:8px 0 0 8px" placeholder="CÓDIGO DA SALA" maxlength="6">
+            <button id="pa" class="px-3 bg-[#08122b] border border-[#1e3a5f] text-slate-300"><i class="fa-regular fa-clipboard"></i></button>
+            <button id="jn" class="bt" style="width:90px;border-radius:0 8px 8px 0">Entrar</button>
+          </div>
+          <div id="rb" class="hidden mt-3 rounded-lg border border-sky-600 p-3 flex justify-between items-center bg-[#08122b]">
+            <div><div class="text-[10px] text-slate-400">CÓDIGO DA SUA SALA</div><b id="rt" class="text-2xl font-mono text-sky-400"></b></div>
+            <button id="cp" class="text-xs bg-[#12284a] text-sky-300 hover:bg-[#1a365d] px-3 py-2 rounded"><i class="fa-solid fa-copy"></i> Copiar</button>
+          </div>
+          <p id="st" class="text-[11px] text-amber-400 font-bold text-center min-h-[16px] mt-2"></p>
+          <label class="lb">Jogadores online</label>
+          <div id="pl" class="space-y-1"></div>
+        </div>
+        <button id="va" class="w-full text-[11px] font-bold text-sky-300 mt-3 py-2 border border-[#12284a] rounded hover:bg-[#12284a]/50 transition-colors">VER TODOS ›</button>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=i=>document.getElementById(i),R=Math.random,V=THREE.Vector3;
+const W={pistol:{n:'Pistola',d:20,t:350,i:'crosshairs'},shotgun:{n:'Escopeta',d:8,t:900,i:'fire',p:6},grenade:{n:'Granada',d:60,t:1200,i:'bomb'},sniper:{n:'Sniper',d:35,t:1100,i:'eye'},smg:{n:'SMG',d:10,t:110,i:'bolt'}};
+const M={br:['BATTLE ROYALE','Último em pé vence!'],pvp:['PVP 5V5','Equipe contra equipe'],dm:['DEATHMATCH','Todos contra todos'],train:['TREINAMENTO','Pratique suas habilidades']};
+const COL=['#00bfff','#10b981','#f59e0b','#8b5cf6','#ef4444','#ec4899'],TC={1:'#3b82f6',2:'#ef4444',3:'#22c55e',4:'#eab308'},TN={1:'Azul',2:'Verm.',3:'Verde',4:'Amar.'};
+const PC={config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}};
+let S={mode:'br',weapon:'pistol',map:'arena',color:COL[0],ft:null,fd:null,sens:.002,on:false,run:false,tp:false,scope:false,host:false,online:false,alive:true,hp:100,sh:0,kills:0,shots:0,dmg:0,rd:0,rw:0,rounds:3,ts:{},t0:0,rid:0,drop:false,fire:false,teams:false,lvl:+localStorage.lvl||12,xp:+localStorage.xp||850};
+let F={},P={},bul=[],tg=[],OB=[],pads=[],items=[],mapObj=[],scene,cam,rend,pg,vm,hw,zone,peer,conn,conns=[],myId='me';
+let pvS,pvC,pvR,pvG;const keys={};let yaw=0,pit=0,vy=0,gr=true,lastShot=0,lastNet=0,lastZ=0,lastItem=0;
+const nm=()=>$('nm').value.trim()||'Atirador',myTeam=()=>S.teams?+$('tm').value:'me',idm=x=>x===myId?'me':x;
+const esc=s=>String(s).replace(/[<>&"']/g,c=>'&#'+c.charCodeAt()+';'),st=t=>$('st').textContent=t,lock=()=>document.body.requestPointerLock();
+const col=(x,z,y)=>OB.some(b=>y+1.7>b.min.y+.15&&y<b.max.y-.05&&x>b.min.x-.4&&x<b.max.x+.4&&z>b.min.z-.4&&z<b.max.z+.4);
+const gnd=(x,z,y)=>OB.reduce((h,b)=>x>b.min.x-.4&&x<b.max.x+.4&&z>b.min.z-.4&&z<b.max.z+.4&&y>=b.max.y-.3&&b.max.y>h?b.max.y:h,0);
+const al=v=>{S.alive=v;if(F.me)F.me.alive=v};
+
+/* ---------- modelos 3D ---------- */
+function vox(c,ft){const g=new THREE.Group(),Mt=x=>new THREE.MeshStandardMaterial({color:x,roughness:.4}),m=Mt(c),a=Mt(0x64748b),d=Mt(0x334155),k=Mt(0x0f172a);
+ const B=(w,h,l,mt,x,y,z)=>{const e=new THREE.Mesh(new THREE.BoxGeometry(w,h,l),mt);e.position.set(x,y,z);g.add(e);return e};
+ B(.7,.6,.4,a,0,.6,0);B(.72,.15,.42,d,0,.35,0);B(.2,.2,.2,k,-.2,.1,0);B(.2,.2,.2,k,.2,.1,0);B(.2,.45,.22,d,-.48,.52,0);B(.2,.45,.22,d,.48,.52,0);B(.2,.15,.22,m,-.48,.22,0);B(.2,.15,.22,m,.48,.22,0);
+ let fm;if(ft)fm=new THREE.MeshStandardMaterial({map:ft});else{const cv=document.createElement('canvas');cv.width=cv.height=64;const x=cv.getContext('2d');x.fillStyle=c;x.fillRect(0,0,64,64);x.fillStyle='#0f172a';x.fillRect(14,20,12,24);x.fillRect(38,20,12,24);fm=new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(cv)})}
+ const h=new THREE.Mesh(new THREE.BoxGeometry(.75,.65,.65),[m,m,m,m,fm,m]);h.position.y=1.25;g.add(h);return g}
+function wm(t){const g=new THREE.Group(),m=new THREE.MeshStandardMaterial({color:0x1e293b}),k=new THREE.MeshStandardMaterial({color:0x64748b,metalness:.8});
+ const L={pistol:[.08,.1,.3],shotgun:[.1,.13,.9],sniper:[.1,.12,1.1],smg:[.09,.14,.5]}[t];
+ if(t==='grenade')g.add(new THREE.Mesh(new THREE.SphereGeometry(.12,10,10),new THREE.MeshStandardMaterial({color:0x15803d})));
+ else{g.add(new THREE.Mesh(new THREE.BoxGeometry(...L),m));if(t!=='pistol'){const b=new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.3),k);b.position.z=-L[2]/2-.1;g.add(b)}}return g}
+function sprite(t,team){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.fillStyle='rgba(0,0,0,0.7)';x.fillRect(10,10,236,44);x.font='bold 22px Segoe UI';x.fillStyle=TC[team]||'#38bdf8';x.textAlign='center';x.textBaseline='middle';x.fillText(t,128,32);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));s.scale.set(1.5,.4,1);s.position.y=2.1;return s}
+
+/* ---------- cena e mapa ---------- */
+function init(){scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0f1d);scene.fog=new THREE.FogExp2(0x0a0f1d,.012);
+ cam=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);rend=new THREE.WebGLRenderer({antialias:true});rend.setSize(innerWidth,innerHeight);rend.setPixelRatio(Math.min(devicePixelRatio,2));$('gc').prepend(rend.domElement);
+ scene.add(new THREE.AmbientLight(0xffffff,.65));const l=new THREE.DirectionalLight(0xffffff,.8);l.position.set(20,40,20);scene.add(l,cam);
+ zone=new THREE.Mesh(new THREE.CylinderGeometry(1,1,40,48,1,true),new THREE.MeshBasicMaterial({color:0x22d3ee,transparent:true,opacity:.25,side:THREE.DoubleSide}));zone.visible=false;scene.add(zone);
+ buildMap();addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rend.setSize(innerWidth,innerHeight)})}
+function buildMap(){mapObj.forEach(o=>scene.remove(o));mapObj=[];OB=[];pads=[];
+ const C={arena:[0x1e293b,0x334155],neon:[0x091026,0x3b2f9e],desert:[0x78350f,0xb45309]}[S.map];
+ const add=(w,h,l,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,l),new THREE.MeshStandardMaterial({color:C[1],roughness:.6}));m.position.set(x,y,z);scene.add(m);mapObj.push(m);OB.push(new THREE.Box3().setFromObject(m))};
+ const fl=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.MeshStandardMaterial({color:C[0],roughness:.8}));fl.rotation.x=-Math.PI/2;scene.add(fl);mapObj.push(fl);
+ [[0,4,-40,80,8,2],[0,4,40,80,8,2],[-40,4,0,2,8,80],[40,4,0,2,8,80],[0,1.5,-10,4,3,4],[-8,1.5,-5,3,3,3],[8,1.5,-5,3,3,3],[-12,2,-15,5,4,2],[12,2,-15,5,4,2],[0,1.5,-22,6,3,2],[-15,1.5,5,3,3,5],[15,1.5,5,3,3,5],[-6,1.5,15,4,3,3],[6,1.5,15,4,3,3],[0,2.5,0,3,5,3],[-20,1.5,-20,4,3,4],[20,1.5,-20,4,3,4],[-20,1.5,20,4,3,4],[20,1.5,20,4,3,4]].forEach(([x,y,z,w,h,l])=>add(w,h,l,x,y,z));
+ [[-10,-10],[10,-10],[0,-18],[-15,12],[15,12]].forEach(([x,z])=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,.15,16),new THREE.MeshStandardMaterial({color:0x38bdf8,emissive:0x0284c7}));p.position.set(x,.08,z);scene.add(p);mapObj.push(p);pads.push(p)})}
+
+/* ---------- lutadores ---------- */
+function mk(id,name,color,team,rem,ft){const g=vox(color,ft);g.add(sprite(name,team));scene.add(g);return F[id]={id,g,name,team,hp:100,alive:true,rem,k:0,nx:0,sd:1,ns:0}}
+function rpos(p){for(let i=0;i<30;i++){p.set((R()-.5)*60,0,(R()-.5)*60);if(!col(p.x,p.z,0))break}}
+function spawn(f,i,n){const p=f.g.position,a=i/Math.max(1,n)*Math.PI*2,r=S.mode==='br'?R()*28:24;
+ if(S.teams)p.set(f.team%2?-28:28,0,(i%6-2.5)*6);else p.set(Math.cos(a)*r,0,Math.sin(a)*r);
+ f.hp=100;f.alive=true;f.g.visible=true;if(f.id==='me'){yaw=Math.atan2(p.x,p.z);pit=0;vy=0;gr=true;S.hp=100;S.sh=0;al(true);S.drop=S.mode==='br';if(S.drop)p.y=35}}
+function startMatch(){
+ Object.values(F).forEach(f=>scene.remove(f.g));F={};if(pg)scene.remove(pg);hw=null;vm=null;buildMap();
+ pg=vox(S.color,S.ft);scene.add(pg);const tm=myTeam();F.me={id:'me',g:pg,team:tm,name:nm(),alive:true};
+ const bot=(i,t)=>{const f=mk('b'+i,'Bot '+(i+1),COL[(R()*6)|0],t,0,null);f.bot=1};
+ if(S.online&&S.mode!=='train'){for(const id in P){const p=P[id];mk(id,p.name,p.color,S.teams?p.team:id,1,p.fd?new THREE.TextureLoader().load(p.fd):null)}}
+ else if(S.mode==='pvp'){const e=tm===1?2:1;for(let i=0;i<4;i++)bot(i,tm);for(let i=4;i<9;i++)bot(i,e)}
+ else if(S.mode==='dm'||S.mode==='br'){const n=S.mode==='dm'?3:7;for(let i=0;i<n;i++)bot(i,'b'+i)}
+ $('lob').classList.add('hidden');$('gc').classList.remove('hidden');$('in-game-gear').classList.remove('hidden');S.on=true;S.rd=0;S.rw=0;setW(S.weapon);round();lock()
+}
+function round(){S.rid++;S.run=true;S.ts={};S.kills=0;S.shots=0;S.dmg=0;bul.forEach(b=>scene.remove(b));bul=[];items.forEach(i=>scene.remove(i.m));items=[];tg.forEach(t=>scene.remove(t));tg=[];
+ const ids=Object.keys(F).sort((a,b)=>(a==='me'?myId:a)<(b==='me'?myId:b)?-1:1);ids.forEach((id,i)=>spawn(F[id],i,ids.length));
+ S.t0=Date.now();lastItem=S.t0;zone.visible=S.mode==='br';$('em').classList.add('hidden');
+ if(S.mode==='train'){const m=new THREE.MeshStandardMaterial({color:0xef4444});[[-6,2,-12],[6,2,-12],[-10,3,-18],[0,4,-20],[10,3,-18],[-4,1.8,-8],[4,1.8,-8],[0,2.5,-14]].forEach(c=>{const t=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.1,16),m);t.rotation.x=Math.PI/2;t.position.set(...c);scene.add(t);tg.push(t)})}
+ for(let i=0;i<2;i++)spawnItem();hud()}
+function setW(k){S.weapon=k;if(!cam)return;if(vm)cam.remove(vm);vm=wm(k);vm.position.set(.3,-.25,-.5);cam.add(vm);if(pg){if(hw)pg.remove(hw);hw=wm(k);hw.rotation.y=Math.PI;hw.position.set(.48,.4,.3);pg.add(hw)}aim(0);hud()}
+
+function aim(o){
+  S.scope=!!o&&S.alive;
+  const sn=S.weapon==='sniper';
+  $('sc').style.display=S.scope&&sn?'block':'none';
+  $('ao').style.display=S.scope&&!sn?'block':'none';
+  cam.fov=S.scope?(sn?22:55):75;
+  cam.updateProjectionMatrix();
+}
+
+function spawnItem(){if(items.length>=4)return;const k=['sh','hp','w'][R()*3|0],wk=Object.keys(W)[R()*5|0],c=k==='sh'?0x22d3ee:0x22c55e;
+ const m=k==='w'?wm(wk):new THREE.Mesh(k==='sh'?new THREE.OctahedronGeometry(.45):new THREE.SphereGeometry(.4,10,10),new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:.4}));
+ const x=(R()-.5)*60,z=(R()-.5)*60;if(col(x,z,0))return;if(k==='w')m.scale.setScalar(1.6);m.position.set(x,k==='w'?.7:1,z);scene.add(m);items.push({m,k,wk})}
+
+/* ---------- combate ---------- */
+function hud(){if(!F.me)return;$('hb').style.width=S.hp+'%';$('sb').style.width=S.sh+'%';const w=W[S.weapon];$('wn').textContent=w.n;$('wi').className='fa-solid fa-'+w.i;
+ let t;if(S.mode==='train')t=tg.length+' / 8 alvos';else if(S.mode==='br')t='Vivos: '+Object.values(F).filter(f=>f.alive).length;
+ else if(S.teams)t=[...new Set(Object.values(F).map(f=>f.team))].map(k=>(TN[k]||'Bots')+' '+(S.ts[k]||0)).join(' × ');else t='Abates: '+S.kills+' / 10';
+ $('hs').textContent=t;$('hm').textContent=M[S.mode][0]+' · RODADA '+Math.min(S.rd+1,S.rounds)+'/'+S.rounds}
+function feed(t){const d=document.createElement('div');d.className='hud mb-1';d.textContent=t;$('kf').append(d);setTimeout(()=>d.remove(),4000)}
+function hm(){$('xh').style.borderColor='#ef4444';setTimeout(()=>$('xh').style.borderColor='',120)}
+function mkB(pos,dir,dm,own,team,g){const b=new THREE.Mesh(new THREE.SphereGeometry(g?.15:.07,8,8),new THREE.MeshBasicMaterial({color:g?0x22c55e:own==='me'?0xf59e0b:0xef4444}));b.position.copy(pos);
+ b.u={d:dir.clone().multiplyScalar(g?.3:.5),dm,own,team,g,life:g?120:90};scene.add(b);bul.push(b)}
+function shoot(){if(!S.run||!S.alive)return;const n=Date.now(),w=W[S.weapon];if(n-lastShot<w.t)return;lastShot=n;S.shots++;
+ const dir=new V(0,0,-1).applyEuler(new THREE.Euler(pit,yaw,0,'YXZ')),o=new V(pg.position.x,pg.position.y+1.5,pg.position.z).addScaledVector(dir,.6),g=S.weapon==='grenade';
+ for(let i=0;i<(w.p||1);i++){const d=dir.clone();if(w.p||S.weapon==='smg'){const s=w.p?.1:.02;d.x+=(R()-.5)*s;d.y+=(R()-.5)*s;d.z+=(R()-.5)*s;d.normalize()}
+  mkB(o,d,w.d,'me',F.me.team,g);if(S.online)send({t:'B',p:o.toArray(),d:d.toArray(),dm:w.d,g})}}
+function hurt(id,d,by){const f=F[id];if(!f||!f.alive)return;
+ if(id==='me'){if(S.sh>0){const a=Math.min(S.sh,d);S.sh-=a;d-=a}S.hp-=d;$('fl').style.opacity=1;setTimeout(()=>$('fl').style.opacity=0,120)}else f.hp-=d;
+ hud();if((id==='me'?S.hp:f.hp)<=0)die(id,by)}
+function hit(f,d,u){if(f.rem){send({t:'H',to:f.id,d,by:myId});S.dmg+=d;hm()}else{hurt(f.id,d,u.own);if(u.own==='me'){S.dmg+=d;hm()}}}
+function die(id,by,rem){const f=F[id];if(!f||!f.alive)return;f.alive=false;f.g.visible=false;if(id==='me'){al(false);aim(0);S.fire=false}
+ const k=F[by];if(k&&k!==f){k.k++;S.ts[k.team]=(S.ts[k.team]||0)+1;if(by==='me')S.kills++}
+ feed((k?k.name:'Zona')+' ➜ '+f.name);if(id==='me'&&S.online&&!rem)send({t:'K',v:myId,by:by==='me'?myId:by});
+ if(!f.rem&&(S.mode==='dm'||S.mode==='pvp')){const r=S.rid;setTimeout(()=>{if(r!==S.rid||!S.run)return;rpos(f.g.position);f.hp=100;f.alive=true;f.g.visible=id!=='me';if(id==='me'){S.hp=100;S.sh=0;al(true)}hud()},3000)}
+ hud();check()}
+function check(){if(!S.run||S.mode==='train')return;
+ if(S.mode==='br'){const t=new Set(Object.values(F).filter(f=>f.alive).map(f=>f.team));if(t.size<=1)endRound([...t][0])}
+ else{const lim=S.mode==='pvp'?15:10;for(const k in S.ts)if(S.ts[k]>=lim)endRound(k)}}
+function blast(p,u){const r=new THREE.Mesh(new THREE.RingGeometry(.1,3,16),new THREE.MeshBasicMaterial({color:0xf97316,side:THREE.DoubleSide,transparent:true,opacity:.8}));r.position.copy(p);r.rotation.x=Math.PI/2;scene.add(r);setTimeout(()=>scene.remove(r),300);
+ if(u.own==='r')return;for(const id in F){const f=F[id];if(!f.alive||f.team===u.team)continue;const q=f.g.position,d=Math.hypot(p.x-q.x,p.y-q.y-.9,p.z-q.z);if(d<4)hit(f,Math.round(u.dm*(1-d/5)),u)}}
+function ub(){for(let i=bul.length-1;i>=0;i--){const b=bul[i],u=b.u,p=b.position;let dead=false;
+ for(let s=0;s<2&&!dead;s++){p.add(u.d);if(u.g)u.d.y-=.0075;
+  if(p.y<=0||OB.some(x=>x.containsPoint(p))){if(u.g)blast(p,u);dead=true;break}
+  if(u.g||u.own==='r')continue;
+  for(const id in F){const f=F[id];if(!f.alive||f.team===u.team)continue;const q=f.g.position;if(Math.hypot(p.x-q.x,p.z-q.z)<.65&&p.y>q.y&&p.y<q.y+1.9){hit(f,u.dm,u);dead=true;break}}
+  if(!dead&&u.own==='me')for(let j=tg.length-1;j>=0;j--)if(tg[j].position.distanceTo(p)<.8){scene.remove(tg[j]);tg.splice(j,1);S.dmg+=u.dm;hm();dead=true;hud();if(!tg.length)endRound('me');break}}
+ if(!dead&&--u.life<=0){if(u.g)blast(p,u);dead=true}
+ if(dead){scene.remove(b);bul.splice(i,1)}}}
+
+function saveScoreToLeaderboard(){
+  let board = JSON.parse(localStorage.getItem('estande_ranking') || '[]');
+  const playerName = nm();
+  const existing = board.find(item => item.name === playerName);
+  if(existing){
+    if(S.lvl > existing.lvl) existing.lvl = S.lvl;
+  } else {
+    board.push({ name: playerName, lvl: S.lvl });
+  }
+  board.sort((a,b)=>b.lvl - a.lvl);
+  localStorage.setItem('estande_ranking', JSON.stringify(board.slice(0, 10)));
+}
+
+function endRound(w){if(!S.run)return;S.run=false;S.fire=false;document.exitPointerLock();aim(0);const win=String(w)===String(F.me.team);S.rd++;if(win)S.rw++;
+ const g=(win?150:60)+S.kills*10;S.xp+=g;while(S.xp>=1500){S.xp-=1500;S.lvl++}localStorage.xp=S.xp;localStorage.lvl=S.lvl;lvUI();
+ saveScoreToLeaderboard();
+ $('mt').textContent=win?'VITÓRIA!':'FIM DA RODADA';$('md').textContent=(win?'Você venceu a rodada! ':'Rodada encerrada. ')+'+'+g+' XP';
+ $('s1').textContent=S.shots;$('s2').textContent=Math.round(S.dmg)+' HP';$('s3').textContent=S.kills;$('s4').textContent=S.rw+' / '+S.rounds;
+ const fin=S.rd>=S.rounds;S.fin=fin;$('mc').textContent=fin?'Voltar ao menu':'Próxima rodada';$('mc').style.display=S.online&&!S.host&&!fin?'none':'block';$('em').classList.remove('hidden')}
+
+/* ---------- bots, zona e movimento ---------- */
+const zr=()=>S.mode==='br'?Math.max(5,38-(Date.now()-S.t0)/1000*.22):99;
+function bm(f,dx,dz){const g=f.g.position;if(!col(g.x+dx,g.z,0))g.x+=dx;if(!col(g.x,g.z+dz,0))g.z+=dz}
+function bot(f,n){if(!f.alive)return;const p=f.g.position;let tgt=null,bd=1e9;
+ for(const id in F){const o=F[id];if(o===f||!o.alive||o.team===f.team)continue;const d=p.distanceTo(o.g.position);if(d<bd){bd=d;tgt=o}}
+ if(S.mode==='br'&&Math.hypot(p.x,p.z)>zr()-2){const d=Math.hypot(p.x,p.z);bm(f,-p.x/d*.08,-p.z/d*.08)}
+ if(!tgt)return;const q=tgt.g.position,dx=(q.x-p.x)/bd,dz=(q.z-p.z)/bd,s=.07;f.g.lookAt(q.x,p.y,q.z);
+ if(bd>14)bm(f,dx*s,dz*s);else if(bd<5)bm(f,-dx*s,-dz*s);else{if(n>f.ns){f.sd=R()>.5?1:-1;f.ns=n+500+R()*1500}bm(f,-dz*s*.7*f.sd,dx*s*.7*f.sd)}
+ if(bd<28&&n>f.nx){f.nx=n+700+R()*600;const o=new V(p.x,1.3,p.z),d=new V(q.x,q.y+.9,q.z).sub(o).normalize();d.x+=(R()-.5)*.09;d.y+=(R()-.5)*.09;d.z+=(R()-.5)*.09;d.normalize();mkB(o.addScaledVector(d,.8),d,10,f.id,f.team,0)}}
+function camUpd(){const p=pg.position;if(S.tp){cam.position.set(p.x+Math.sin(yaw)*3.2,p.y+2.3,p.z+Math.cos(yaw)*3.2);cam.lookAt(p.x,p.y+1.3,p.z)}else{cam.position.set(p.x,p.y+1.5,p.z);cam.rotation.set(pit,yaw,0,'YXZ')}
+ pg.visible=S.tp&&S.alive;if(vm)vm.visible=!S.tp&&!S.scope&&S.alive}
+function move(){if(S.alive){const sp=keys.ShiftLeft&&!S.scope?.22:.14,v=new V((keys.KeyD?1:0)-(keys.KeyA?1:0),0,(keys.KeyS?1:0)-(keys.KeyW?1:0)),p=pg.position;
+ if(v.lengthSq())v.normalize().multiplyScalar(sp).applyAxisAngle(new V(0,1,0),yaw);
+ if(!col(p.x+v.x,p.z,p.y))p.x+=v.x;if(!col(p.x,p.z+v.z,p.y))p.z+=v.z;
+ if(S.drop)vy=-.12;else{if(keys.Space&&gr){vy=.22;gr=false}vy-=.012}
+ let ny=p.y+vy;const h=gnd(p.x,p.z,p.y);if(ny<=h){ny=h;vy=0;gr=true;S.drop=false}
+ pads.forEach(d=>{if(gr&&Math.hypot(p.x-d.position.x,p.z-d.position.z)<1.2){vy=.42;gr=false}});
+ p.y=ny;pg.rotation.y=yaw+Math.PI;
+ items=items.filter(it=>{it.m.rotation.y+=.03;if(it.m.position.distanceTo(new V(p.x,p.y+1,p.z))>1.6)return true;if(it.k==='sh')S.sh=Math.min(100,S.sh+50);else if(it.k==='hp')S.hp=Math.min(100,S.hp+40);else setW(it.wk);scene.remove(it.m);hud();return false});
+ if(S.fire)shoot()}camUpd()}
+function tick(){requestAnimationFrame(tick);if(!S.on)return;
+ if(S.run){const n=Date.now();move();for(const id in F)if(F[id].bot)bot(F[id],n);ub();
+  if(S.mode==='br'){const r=zr();zone.scale.set(r,1,r);zone.position.y=20;if(n-lastZ>1000){lastZ=n;for(const id in F){const f=F[id];if(f.alive&&!f.rem&&Math.hypot(f.g.position.x,f.g.position.z)>r)hurt(id,3,'-')}}}
+  if(n-lastItem>12000){lastItem=n;spawnItem()}
+  if(S.online&&n-lastNet>50){lastNet=n;const p=pg.position;send({t:'M',x:p.x,y:p.y,z:p.z,r:pg.rotation.y,a:S.alive})}}
+ rend.render(scene,cam)}
+
+/* ---------- multiplayer e lista de jogadores online corrigida ---------- */
+function send(o){o.f=myId;if(S.host)conns.forEach(c=>c.open&&c.send(o));else if(conn&&conn.open)conn.send(o)}
+
+function plist(){
+  let L = [];
+  L.push([nm() + ' (você)', S.on ? 'Em jogo' : 'Na sala']);
+  for(const id in P){
+    L.push([P[id].name, S.on ? 'Em jogo' : 'Na sala']);
+  }
+  if(L.length === 1 && !S.online){
+    // Exibe lista padrão caso não esteja conectado numa sala online, ou adiciona bots simulados ativos
+    L.push(['RafinhaFPS', 'Em jogo'], ['ZikaDoHeadshot', 'Na sala'], ['GhostBR', 'Em jogo'], ['LipeX', 'Na sala']);
+  }
+  if(!$('va').dataset.all) L = L.slice(0, 4);
+  $('pl').innerHTML = L.map(([n,s])=>`<div class="flex items-center gap-2 py-2 border-b border-[#12284a] text-sm"><span class="w-2 h-2 rounded-full ${s=='Em jogo'?'bg-green-400':'bg-sky-400'}"></span><i class="fa-solid fa-circle-user text-2xl text-slate-500"></i><b class="flex-1">${esc(n)}</b><span class="text-xs ${s=='Em jogo'?'text-green-400':'text-sky-300'}">${s}</span></div>`).join('');
+  if(S.online && S.host) st('Jogadores na sala: ' + (Object.keys(P).length + 1) + '/6');
+}
+
+function dropP(id){delete P[id];if(F[id]){scene.remove(F[id].g);delete F[id];hud();check()}plist()}
+function on(d){const t=d.t;
+ if(t==='SY'){d.list.forEach(p=>P[p.id]=p);plist()}else if(t==='J'){P[d.id]=d;plist()}else if(t==='FULL')st('Sala cheia ou partida em andamento.');
+ else if(t==='PONG')$('pg').textContent=(Date.now()-d.ts)+' ms';
+ else if(t==='GO'){Object.assign(S,{mode:d.mode,map:d.map,teams:d.teams,rounds:d.rounds});$('mp').value=d.map;startMatch()}
+ else if(t==='NR')round();
+ else if(t==='M'){const f=F[d.f];if(f){f.g.position.set(d.x,d.y,d.z);f.g.rotation.y=d.r;f.alive=d.a;f.g.visible=d.a}}
+ else if(t==='B')mkB(new V(...d.p),new V(...d.d),d.dm,'r',-1,d.g);
+ else if(t==='H'){if(d.to===myId)hurt('me',d.d,idm(d.by))}
+ else if(t==='K')die(d.v,idm(d.by),1)}
+
+function createRoom(){if(peer)peer.destroy();conns=[];P={};const code=R().toString(36).slice(2,8).toUpperCase();st('Criando sala...');peer=new Peer('est3d-'+code,PC);
+ peer.on('open',id=>{myId=id;S.host=true;S.online=true;$('rt').textContent=code;$('rb').classList.remove('hidden');plist()});
+ peer.on('error',e=>{if(e.type==='unavailable-id')createRoom();else st('Erro de conexão: '+e.type)});
+ peer.on('connection',c=>{if(Object.keys(P).length>=5||S.on){c.on('open',()=>{c.send({t:'FULL'});setTimeout(()=>c.close(),400)});return}conns.push(c);
+  c.on('data',d=>{if(d.t==='J'){P[d.id]=d;conns.forEach(o=>o!==c&&o.open&&o.send(d));c.send({t:'SY',list:[{id:myId,name:nm(),color:S.color,team:+$('tm').value,fd:S.fd},...Object.values(P).filter(p=>p.id!==d.id)]});plist()}
+   else if(d.t==='PING')c.send({t:'PONG',ts:d.ts});else{conns.forEach(o=>o!==c&&o.open&&o.send(d));on(d)}});
+  c.on('close',()=>{conns=conns.filter(o=>o!==c);dropP(c.peer)})})}
+
+function joinRoom(code){if(peer)peer.destroy();P={};st('Conectando...');peer=new Peer(PC);
+ peer.on('open',id=>{myId=id;S.host=false;S.online=true;conn=peer.connect('est3d-'+code.toUpperCase().trim(),{reliable:true});
+  conn.on('open',()=>{st('Na sala! Aguarde o host iniciar.');conn.send({t:'J',id:myId,name:nm(),color:S.color,team:+$('tm').value,fd:S.fd});setInterval(()=>conn.open&&conn.send({t:'PING',ts:Date.now()}),2000)});
+  conn.on('data',on);conn.on('close',()=>{alert('Conexão com o host perdida.');location.reload()})});
+ peer.on('error',e=>st(e.type==='peer-unavailable'?'Sala não encontrada.':'Erro de conexão: '+e.type))}
+
+/* ---------- interface ---------- */
+function lvUI(){$('lv').textContent=S.lvl;$('xb').style.width=S.xp/15+'%';$('xt').textContent=S.xp+' / 1.500 XP'}
+function modeUI(){$('bt').textContent=M[S.mode][0];$('bs').textContent=M[S.mode][1];document.querySelectorAll('.md').forEach(e=>e.classList.toggle('on',e.dataset.m===S.mode))}
+
+function tab(t){
+  document.querySelectorAll('.nv').forEach(a=>a.classList.toggle('on',a.dataset.t===t));
+  const m=$('tabm');
+  if(t==='home'||t==='skin'){
+    m.classList.add('hidden');
+    if(t==='skin'){$('pf').scrollIntoView({behavior:'smooth'});$('pf').classList.add('pulse');setTimeout(()=>$('pf').classList.remove('pulse'),2200)}
+    return;
+  }
+  m.classList.remove('hidden');
+  if(t==='guns'){
+    $('tt').textContent='ARMAS — escolha sua arma inicial';
+    $('tb').innerHTML='<div class="grid grid-cols-2 md:grid-cols-5 gap-3">'+Object.entries(W).map(([k,w])=>`<div class="md ${k===S.weapon?'on':''}" onclick="pick('${k}')"><i class="fa-solid fa-${w.i}"></i><b>${w.n}</b><span>Dano ${w.d}${w.p?' ×'+w.p:''} · ${w.t}ms</span></div>`).join('')+'</div>';
+  } else {
+    $('tt').textContent='RANKING DE JOGADORES';
+    let board = JSON.parse(localStorage.getItem('estande_ranking') || '[]');
+    if(!board.some(item => item.name === nm())){
+      board.push({ name: nm(), lvl: S.lvl });
+    }
+    board.sort((a,b)=>b.lvl - a.lvl);
+    $('tb').innerHTML = board.slice(0, 10).map((r,i)=>`<div class="flex justify-between py-2 border-b border-[#12284a] text-sm"><span>${i+1}. ${esc(r.name)}</span><b class="text-sky-300">Nível ${r.lvl}</b></div>`).join('');
+  }
+}
+
+function pick(k){S.weapon=k;setW(k);upPv();tab('guns')}
+function upPv(){if(pvG)pvS.remove(pvG);pvG=vox(S.color,S.ft);const w=wm(S.weapon);w.rotation.y=Math.PI;w.position.set(.48,.4,.3);pvG.add(w);pvS.add(pvG)}
+function initPv(){const c=$('pv'),w=c.clientWidth,h=c.clientHeight;pvS=new THREE.Scene();pvC=new THREE.PerspectiveCamera(40,w/h,.1,50);pvC.position.set(0,1,3.6);pvC.lookAt(0,.75,0);
+ pvR=new THREE.WebGLRenderer({antialias:true,alpha:true});pvR.setSize(w,h);c.appendChild(pvR.domElement);pvS.add(new THREE.AmbientLight(0xffffff,.8));const l=new THREE.DirectionalLight(0xffffff,1);l.position.set(2,4,3);pvS.add(l);upPv();
+ (function a(){requestAnimationFrame(a);if(pvG)pvG.rotation.y+=.012;pvR.render(pvS,pvC)})()}
+function setColor(c){S.color=c;document.querySelectorAll('.cl').forEach(e=>e.classList.toggle('on',e.dataset.c===c));upPv()}
+function go(){if(S.online&&!S.host&&S.mode!=='train')return st('Aguarde o host iniciar a partida.');
+ S.teams=S.mode==='pvp'||(S.online&&S.mode!=='train'&&$('gm').value==='team');S.rounds=S.mode==='train'?1:+$('rd').value;S.map=$('mp').value;
+ if(S.online&&S.host&&S.mode!=='train')send({t:'GO',mode:S.mode,map:S.map,teams:S.teams,rounds:S.rounds});startMatch()}
+
+addEventListener('DOMContentLoaded',()=>{
+  init();initPv();lvUI();modeUI();plist();tick();
+  $('cl').innerHTML=COL.map(c=>`<button class="cl ${c===S.color?'on':''}" data-c="${c}" style="background:${c}"></button>`).join('');
+  $('cl').onclick=e=>{if(e.target.dataset.c)setColor(e.target.dataset.c)};
+  const cyc=d=>setColor(COL[(COL.indexOf(S.color)+d+6)%6]);$('pl1').onclick=()=>cyc(-1);$('pl2').onclick=()=>cyc(1);
+  document.querySelectorAll('.nv').forEach(a=>a.onclick=()=>tab(a.dataset.t));
+  $('mds').onclick=e=>{const m=e.target.closest('.md');if(m){S.mode=m.dataset.m;modeUI()}};
+  $('mp').onchange=e=>{$('mp2').value=e.target.value;S.map=e.target.value};$('mp2').onchange=e=>{$('mp').value=e.target.value;S.map=e.target.value};
+  $('nm').oninput=()=>{$('hn').textContent=nm();plist()};
+  $('se').oninput=e=>{$('sv').textContent=(+e.target.value).toFixed(1);S.sens=e.target.value*.001};
+  $('ff').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=64,s=Math.min(im.width,im.height);c.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,64,64);S.fd=c.toDataURL('image/jpeg',.7);S.ft=new THREE.CanvasTexture(c);$('fn').textContent=fl.name;upPv()};im.src=r.result};r.readAsDataURL(fl)};
+  $('go').onclick=go;$('cr').onclick=createRoom;$('jn').onclick=()=>{const c=$('rc').value.trim();if(c)joinRoom(c)};
+  $('pa').onclick=()=>navigator.clipboard.readText().then(t=>$('rc').value=t.trim().slice(0,6).toUpperCase()).catch(()=>{});
+  $('cp').onclick=()=>{navigator.clipboard.writeText($('rt').textContent);$('cp').textContent='Copiado!'};
+  $('va').onclick=()=>{$('va').dataset.all=$('va').dataset.all?'':'1';plist()};
+  $('mc').onclick=()=>{if(S.fin)return location.reload();if(S.online&&S.host)send({t:'NR'});round();lock()};
+
+  /* CONTROLES DO MODAL DA ENGRENAGEM (FUNCIONANDO NO MENU E DENTRO DO JOGO) */
+  const openGear = () => $('gear-modal').classList.remove('hidden');
+  const closeGear = () => $('gear-modal').classList.add('hidden');
+  
+  $('btn-gear').onclick = openGear;
+  $('in-game-gear').onclick = openGear;
+  $('gear-close').onclick = closeGear;
+  $('gear-save').onclick = () => {
+    alert('Configurações salvas com sucesso!');
+    closeGear();
+  };
+
+  addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyV')S.tp=!S.tp});addEventListener('keyup',e=>keys[e.code]=false);
+  addEventListener('mousemove',e=>{if(document.pointerLockElement){yaw-=e.movementX*S.sens;pit=Math.max(-1.4,Math.min(1.4,pit-e.movementY*S.sens))}});
+  addEventListener('mousedown',e=>{if(!S.run)return;if(!document.pointerLockElement)return lock();if(e.button===0)S.fire=true;if(e.button===2)aim(1)});
+  addEventListener('mouseup',e=>{if(e.button===0)S.fire=false;if(e.button===2)aim(0)});addEventListener('contextmenu',e=>e.preventDefault())
+});
+</script>
+</body>
+</html>
